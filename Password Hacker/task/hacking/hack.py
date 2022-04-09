@@ -49,29 +49,69 @@
 #         i += 1
 
 # -------------------------------------------STAGE 3-------------------------------------------
+# import itertools
+# import socket
+# import string
+# import sys
+#
+# NUMBERS = [str(x) for x in range(10)]
+# LITERAS = list(string.ascii_lowercase)
+#
+#
+# def generate_passwords():
+#     with open('passwords.txt', 'r') as reader:
+#         for line in reader.readlines():
+#             password1 = line[:-1]
+#             pp = []
+#             for i in range(len(password1)):
+#                 if password1[i] in NUMBERS:
+#                     pp.append([password1[i]])
+#                 elif password1[i].lower() in LITERAS:
+#                     pp.append([password1[i].lower(), password1[i].upper()])
+#             possible_passwords = []
+#             for elem in itertools.product(*pp):
+#                 possible_passwords.append("".join(elem))
+#             yield possible_passwords
+#
+# hostname = sys.argv[1]
+# port = int(sys.argv[2])
+#
+# with socket.socket() as my_s:
+#     my_s.connect((hostname, port))
+#
+#     password_generator = generate_passwords()
+#     finished = False
+#     while not finished:
+#         passwords = next(password_generator)
+#         for password in passwords:
+#             my_s.send(password.encode())
+#             respond = my_s.recv(1024).decode('utf8')
+#             if respond == "Connection success!":
+#                 print(password)
+#                 finished = True
+#                 break
+
+# -------------------------------------------STAGE 4-------------------------------------------
 import itertools
 import socket
 import string
 import sys
+import json
 
 NUMBERS = [str(x) for x in range(10)]
-LITERAS = list(string.ascii_lowercase)
+LITERAS = list(string.ascii_letters)
 
 
-def generate_passwords():
-    with open('passwords.txt', 'r') as reader:
-        for line in reader.readlines():
-            password1 = line[:-1]
-            pp = []
-            for i in range(len(password1)):
-                if password1[i] in NUMBERS:
-                    pp.append([password1[i]])
-                elif password1[i].lower() in LITERAS:
-                    pp.append([password1[i].lower(), password1[i].upper()])
-            possible_passwords = []
-            for elem in itertools.product(*pp):
-                possible_passwords.append("".join(elem))
-            yield possible_passwords
+def generate_passwords(prefix):
+    for symbol in itertools.chain(NUMBERS, LITERAS):
+        yield prefix + symbol
+
+
+def generate_logins():
+    with open('logins.txt', 'r') as reader:
+        for _login in reader.readlines():
+            yield _login[:-1]
+
 
 hostname = sys.argv[1]
 port = int(sys.argv[2])
@@ -79,14 +119,34 @@ port = int(sys.argv[2])
 with socket.socket() as my_s:
     my_s.connect((hostname, port))
 
-    password_generator = generate_passwords()
+    # hack the login
+    login_generator = generate_logins()
+    for login in login_generator:
+        msg = {"login": login, "password": " "}
+        msg_json = json.dumps(msg)
+        my_s.send(msg_json.encode())
+        respond_json = my_s.recv(1024).decode('utf8')
+        respond = json.loads(respond_json)
+        if respond['result'] == "Wrong password!":
+            break
+
+    # hack the password
+    prefix = ''
     finished = False
     while not finished:
-        passwords = next(password_generator)
-        for password in passwords:
-            my_s.send(password.encode())
-            respond = my_s.recv(1024).decode('utf8')
-            if respond == "Connection success!":
-                print(password)
+        password_generator = generate_passwords(prefix)
+        for password in password_generator:
+            msg = {"login": login, "password": password}
+            msg_json = json.dumps(msg)
+            my_s.send(msg_json.encode())
+            respond_json = my_s.recv(1024).decode('utf8')
+            respond = json.loads(respond_json)
+            if respond['result'] == "Connection success!":
                 finished = True
                 break
+            elif respond['result'] == "Exception happened during login":
+                prefix = password
+                break
+
+    print(msg_json)
+
